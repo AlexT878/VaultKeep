@@ -2,6 +2,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.orm import declarative_base
 
+
 def create_sql_light_engine(path: str | None = None):
     # if path is None:
     #     path = settings.sqlite_database_url
@@ -10,6 +11,7 @@ def create_sql_light_engine(path: str | None = None):
     #     raise ValueError("SQLITE_DATABASE_URL environment variable is not set.")
 
     return create_engine(f"sqlite:///{path}")
+
 
 # def create_postgres_engine(connection_string: str | None = None):
 #     if connection_string is None:
@@ -24,7 +26,7 @@ Base = declarative_base()
 
 engine = create_sql_light_engine("vaultkeep.db")
 Session = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-# Base.metadata.create_all(bind=engine)
+
 
 def get_db():
     if Session is None:
