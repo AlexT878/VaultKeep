@@ -1,17 +1,14 @@
-from fastapi import FastAPI
 import uvicorn
+from fastapi import FastAPI
 
-app = FastAPI()
+from api.lifespan import lifespan
+from api.routes import auth_router, core_router
 
+app = FastAPI(lifespan=lifespan)
 
-@app.get("/")
-def read_root():
-    return {"Hello": "World"}
+app.include_router(core_router)
+app.include_router(auth_router)
 
-
-@app.get("/items/{item_id}")
-def read_item(item_id: int, q: str | None = None):
-    return {"item_id": item_id, "q": q}
 
 def main():
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
