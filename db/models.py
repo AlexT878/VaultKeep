@@ -7,6 +7,7 @@ from sqlalchemy import (
     func,
 )
 
+
 class UserRecord(Base):
     __tablename__ = "users"
 
@@ -15,5 +16,17 @@ class UserRecord(Base):
     name = Column(String, nullable=True)
     phone = Column(String, nullable=True)
     avatar_url = Column(String, nullable=True)
-    password_hash = Column(String, nullable=True) 
+    password_hash = Column(String, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class FileRecord(Base):
+    __tablename__ = "files"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, nullable=False)
+    original_name = Column(String, nullable=False)
+    stored_name = Column(String, nullable=False)
+    file_path = Column(String, nullable=False)
+    size = Column(Integer)
     created_at = Column(DateTime(timezone=True), server_default=func.now())

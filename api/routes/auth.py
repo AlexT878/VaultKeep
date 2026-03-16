@@ -1,87 +1,46 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from db.models import UserRecord
-from db.database import get_db
-from pydantic import BaseModel, Field, EmailStr, ConfigDict
-import hashlib
 from sqlalchemy.orm import Session
-import jwt
-from datetime import datetime, timedelta, timezone
-from dotenv import load_dotenv
-import os
 
-load_dotenv()
-SECRET_KEY = os.getenv("SECRET_KEY")
-ALGORITHM = os.getenv("ALGORITHM", "HS256")
-ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 30))
+from api.models import LoginRequest, SignupRequest, TokenResponse, UserResponse
+from db.database import get_db
+from db.models import UserRecord
+from utils.auth import create_token, hash_password, verify_password
+from db.repository import get_user_by_email, create_user
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
-def check_user_exists(db: Session, email: str):
-    user = db.query(UserRecord).filter(UserRecord.email == email).first()
-    if user:
+@router.post(
+    "/signup", response_model=TokenResponse, status_code=status.HTTP_201_CREATED
+)
+def signup(body: SignupRequest, db: Session = Depends(get_db)):
+    if get_user_by_email(db, body.email):
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered"
+            status_code=status.HTTP_409_CONFLICT, detail="Email already registered"
         )
-    return False
 
-
-def create_access_token(data: dict):
-    to_encode = data.copy()
-    expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    to_encode.update({"exp": expire})
-    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-
-
-class UserCreate(BaseModel):
-    email: EmailStr
-    name: str = Field(min_length=5, max_length=20)
-    avatar_url: str = Field(default="")
-    password: str = Field(min_length=8, max_length=20)
-
-
-class User(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    id: int
-    email: EmailStr
-    name: str
-    avatar_url: str | None = None
-    password_hash: str
-
-
-class TokenResponse(BaseModel):
-    user: User
-    access_token: str
-    token_type: str = "bearer"
-
-
-@router.post("/login")
-def login():
-    """Login endpoint. Implement later."""
-    pass
-
-
-@router.post("/signup")
-def signup(user_create: UserCreate, db=Depends(get_db)):
-    check_user_exists(db, user_create.email)
-
-    hashed_password = hashlib.sha256(user_create.password.encode()).hexdigest()
-
-    new_user = UserRecord(
-        email=user_create.email,
-        name=user_create.name,
-        avatar_url=user_create.avatar_url,
-        password_hash=hashed_password,
-    )
-
-    db.add(new_user)
-    db.commit()
-    db.refresh(new_user)
-
-    user_pydantic = User.model_validate(new_user)
-    access_token = create_access_token(data={"sub": str(user_pydantic.id)})
+    user = create_user(db, body.email, body.name, body.password)
 
     return TokenResponse(
-        user=user_pydantic, access_token=access_token, token_type="bearer"
+        access_token=create_token(user.id),
+        user=UserResponse.model_validate(user),
+    )
+
+
+@router.post("/login", response_model=TokenResponse)
+def login(body: LoginRequest, db: Session = Depends(get_db)):
+    user = get_user_by_email(db, body.email)
+
+    if (
+        not user
+        or not user.password_hash
+        or not verify_password(body.password, user.password_hash)
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password"
+        )
+
+    return TokenResponse(
+        access_token=create_token(user.id),
+        user=UserResponse.model_validate(user),
     )
