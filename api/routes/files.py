@@ -52,17 +52,23 @@ async def list_user_files(
     return file_service.get_files_by_user(db, current_user.id)
 
 
-@router.get("/search")
-async def search_files(
-    query_text: str,
+@router.get("/search_content")
+async def search_content(
+    q: str,
+    limit: int = 20,
+    offset: int = 0,
     current_user: UserRecord = Depends(get_current_user),
     file_service: FileService = Depends(get_file_service),
     db: Session = Depends(get_db),
 ):
-    if not query_text:
+    q = (q or "").strip()
+    if not q:
         raise HTTPException(status_code=400, detail="Search query is required")
 
-    results = file_service.search_files(db, current_user.id, query_text)
+    liimit = max(1, min(limit, 100))
+    offset = max(0, offset)
+
+    results = file_service.search_files(db, current_user.id, q, limit, offset)
     return results
 
 

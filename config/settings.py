@@ -16,6 +16,8 @@ class Settings(BaseSettings):
     # postgresql+psycopg2://user:password@localhost:5432/vaultkeep
     pg_database_url: str | None = None
 
+    voyage_api_key: str
+
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
 

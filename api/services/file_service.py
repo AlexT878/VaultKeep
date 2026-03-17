@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from db.models import FileContentRecord, FileRecord
 from sqlalchemy import func
+from utils.embeddings import chunk_by_section, embed_texts
 
 
 class FileService:
@@ -74,11 +75,18 @@ class FileService:
             text_content = ""
 
         if text_content:
-            content_record = FileContentRecord(
-                file_id=record.id,
-                content_tsv=func.to_tsvector("english", text_content),
-            )
-            db.add(content_record)
+            chunks = chunk_by_section(text_content)
+
+            if chunks:
+                vectors = embed_texts(chunks)
+                for i, chunk_text in enumerate(chunks):
+                    content_record = FileContentRecord(
+                        file_id=record.id,
+                        content_raw=chunk_text,
+                        content_tsv=func.to_tsvector("english", chunk_text),
+                        embedding=vectors[i],
+                    )
+                    db.add(content_record)
 
         db.commit()
         db.refresh(record)
@@ -95,18 +103,52 @@ class FileService:
             .first()
         )
 
-    def search_files(self, db: Session, user_id: int, query_text: str):
-        return (
-            db.query(FileRecord)
-            .join(FileContentRecord)
-            .filter(
-                FileRecord.user_id == user_id,
-                FileContentRecord.content_tsv.op("@@")(
-                    func.plainto_tsquery("english", query_text)
-                ),
-            )
+    def search_files(
+        self,
+        db: Session,
+        user_id: int,
+        query_text: str,
+        limit: int = 20,
+        offset: int = 0,
+    ):
+        q = (query_text or "").strip()
+        if not q:
+            return []
+
+        tsquery = func.websearch_to_tsquery("english", q)
+        rank = func.ts_rank_cd(FileContentRecord.content_tsv, tsquery).label("rank")
+
+        rows = (
+            db.query(FileContentRecord.id, FileRecord, rank)
+            .join(FileContentRecord, FileContentRecord.file_id == FileRecord.id)
+            .filter(FileRecord.user_id == user_id)
+            .filter(FileContentRecord.content_tsv.op("@@")(tsquery))
+            .order_by(rank.desc(), FileRecord.created_at.desc())
+            .offset(offset)
+            .limit(limit)
             .all()
         )
+
+        results: list[dict] = []
+        for chunk_id, file_record, file_rank in rows:
+            results.append(
+                {
+                    "rank": float(file_rank or 0.0),
+                    "chunk_id": chunk_id,
+                    "file": {
+                        "id": file_record.id,
+                        "original_name": file_record.original_name,
+                        "random_name": file_record.random_name,
+                        "content_type": file_record.content_type,
+                        "size": file_record.size,
+                        "user_id": file_record.user_id,
+                        "created_at": file_record.created_at,
+                        "path": file_record.path,
+                    },
+                }
+            )
+
+        return results
 
 
 def get_file_service() -> FileService:

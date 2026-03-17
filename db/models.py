@@ -1,4 +1,5 @@
-from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, func, Index
+from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, func, Index, Text
+from pgvector.sqlalchemy import Vector
 from sqlalchemy.dialects.postgresql import TSVECTOR
 from sqlalchemy.orm import relationship
 
@@ -37,7 +38,6 @@ class FileRecord(Base):
     content = relationship(
         "FileContentRecord",
         back_populates="file",
-        uselist=False,
         cascade="all, delete-orphan",
     )
 
@@ -45,11 +45,14 @@ class FileRecord(Base):
 class FileContentRecord(Base):
     __tablename__ = "file_content"
 
+    id = Column(Integer, primary_key=True, autoincrement=True, index=True)
     file_id = Column(Integer, ForeignKey("files.id"), primary_key=True)
+    content_raw = Column(Text, nullable=False)
     # Use a GIN index in Postgres for efficient full-text search.
     # We declare the index explicitly instead of using index=True to avoid a default btree index,
     # which can hit Postgres row-size limits for large tsvectors.
     content_tsv = Column(TSVECTOR, nullable=False)
+    embedding = Column(Vector(2048), nullable=True)
 
     __table_args__ = (
         Index(
