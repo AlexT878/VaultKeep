@@ -6,11 +6,11 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
 from sqlalchemy.orm import Session
+from config.settings import settings
 
 from db.database import get_db
 from db.models import UserRecord
 
-SECRET_KEY = os.getenv("SECRET_KEY", "change-me-in-production")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 24 hours
 
@@ -28,7 +28,7 @@ def verify_password(plain: str, hashed: str) -> bool:
 def create_token(user_id: int) -> str:
     expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     return jwt.encode(
-        {"sub": str(user_id), "exp": expire}, SECRET_KEY, algorithm=ALGORITHM
+        {"sub": str(user_id), "exp": expire}, settings.secret_key, algorithm=ALGORITHM
     )
 
 
@@ -45,7 +45,7 @@ def get_current_user(
     # Step 2: Decode JWT
     try:
         payload = jwt.decode(
-            credentials.credentials, SECRET_KEY, algorithms=[ALGORITHM]
+            credentials.credentials, settings.secret_key, algorithms=[ALGORITHM]
         )
         user_id = payload.get("sub")
         if user_id is None:

@@ -5,7 +5,6 @@ from api.models import LoginRequest, SignupRequest, TokenResponse, UserResponse
 from db.database import get_db
 from db.models import UserRecord
 from utils.auth import create_token, hash_password, verify_password
-from db.repository import get_user_by_email, create_user
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -14,12 +13,19 @@ router = APIRouter(prefix="/auth", tags=["auth"])
     "/signup", response_model=TokenResponse, status_code=status.HTTP_201_CREATED
 )
 def signup(body: SignupRequest, db: Session = Depends(get_db)):
-    if get_user_by_email(db, body.email):
+    if db.query(UserRecord).filter(UserRecord.email == body.email).first():
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT, detail="Email already registered"
         )
 
-    user = create_user(db, body.email, body.name, body.password)
+    user = UserRecord(
+        email=body.email,
+        name=body.name,
+        password_hash=hash_password(body.password),
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
 
     return TokenResponse(
         access_token=create_token(user.id),
@@ -29,7 +35,7 @@ def signup(body: SignupRequest, db: Session = Depends(get_db)):
 
 @router.post("/login", response_model=TokenResponse)
 def login(body: LoginRequest, db: Session = Depends(get_db)):
-    user = get_user_by_email(db, body.email)
+    user = db.query(UserRecord).filter(UserRecord.email == body.email).first()
 
     if (
         not user

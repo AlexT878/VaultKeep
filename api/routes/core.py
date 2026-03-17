@@ -9,7 +9,7 @@ router = APIRouter(tags=["core"])
 def root(user: UserRecord = Depends(get_current_user)):
     return {
         "ok": True,
-        "message": "Chatbox API is running",
+        "message": "VaultKeep API is running",
         "version": "0.1.0",
         "user_name": user.email,
     }
@@ -17,4 +17,4 @@ def root(user: UserRecord = Depends(get_current_user)):
 
 @router.get("/healthz")
 def healthz():
-    return {"ok": True, "service": "chatbox-api", "version": "0.1.0"}
+    return {"ok": True, "service": "vaultkeep-api", "version": "0.1.0"}
